@@ -11,7 +11,7 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "clean": "rm -rf dist",
-    "test": "node --require ts-node/register --test src/__tests__/**/*.test.ts"
+    "test": "FORCE_COLOR=1 node --require ts-node/register --test src/__tests__/**/*.test.ts"
   },
   "dependencies": {
     "@iarna/toml": "^2.2.5",

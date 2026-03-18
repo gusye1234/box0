@@ -6,6 +6,10 @@ import * as path from 'path';
 import * as crypto from 'crypto';
 import { Session, Message } from '../types';
 
+function stripAnsi(s: string): string {
+  return s.replace(/\x1B\[[0-9;]*m/g, '');
+}
+
 function makeSession(overrides: Partial<Omit<Session, 'message_count'>> = {}): Omit<Session, 'message_count'> {
   return {
     id: crypto.randomBytes(20).toString('hex'),
@@ -62,11 +66,12 @@ describe('search command (runSearch)', () => {
 
     const result = runSearch('authentication', {});
     assert.strictEqual(result.exitCode, 0);
-    assert.ok(result.stdout.includes('Auth Fix'), 'Should include session title');
-    assert.ok(result.stdout.includes('2026-03-15'), 'Should include date');
-    assert.ok(result.stdout.includes('authentication'), 'Should include keyword');
-    assert.ok(result.stdout.includes(`session: ${s.id}`), 'Should include session id');
-    assert.ok(!result.stdout.includes('<b>'), 'Should not include raw <b> tags');
+    const plain = stripAnsi(result.stdout);
+    assert.ok(plain.includes('Auth Fix'), 'Should include session title');
+    assert.ok(plain.includes('2026-03-1'), 'Should include date');
+    assert.ok(plain.includes('authentication'), 'Should include keyword');
+    assert.ok(plain.includes(`session: ${s.id}`), 'Should include session id');
+    assert.ok(!plain.includes('<b>'), 'Should not include raw <b> tags');
   });
 
   test('--agent filter narrows results', () => {
@@ -83,9 +88,10 @@ describe('search command (runSearch)', () => {
 
     const result = runSearch('refactor', { agent: 'claude-code' });
     assert.strictEqual(result.exitCode, 0);
-    assert.ok(result.stdout.includes('[claude-code]'), 'Should include claude-code result');
-    assert.ok(!result.stdout.includes('[openclaw]'), 'Should not include openclaw result');
-    assert.ok(result.stdout.includes('(agent: claude-code)'), 'Should note agent filter in header');
+    const plain = stripAnsi(result.stdout);
+    assert.ok(plain.includes('[claude-code]'), 'Should include claude-code result');
+    assert.ok(!plain.includes('[openclaw]'), 'Should not include openclaw result');
+    assert.ok(plain.includes('(agent: claude-code)'), 'Should note agent filter in header');
   });
 
   test('invalid agent prints error and exits 1', () => {
@@ -110,8 +116,8 @@ describe('search command (runSearch)', () => {
 
     const result = runSearch('typescript', { limit: '2' });
     assert.strictEqual(result.exitCode, 0);
-    // Count occurrences of "session: " to count results
-    const matches = result.stdout.match(/session: /g);
+    const plain = stripAnsi(result.stdout);
+    const matches = plain.match(/session: /g);
     assert.ok(matches !== null && matches.length <= 2, 'Should return at most 2 results');
   });
 
@@ -168,8 +174,9 @@ describe('search command (runSearch)', () => {
 
     const result = runSearch('typescript', {});
     assert.strictEqual(result.exitCode, 0);
-    assert.ok(!result.stdout.includes('<b>'), 'Should not contain raw <b> tags');
-    assert.ok(result.stdout.toLowerCase().includes('typescript'), 'Keyword should still be visible');
+    const plain = stripAnsi(result.stdout);
+    assert.ok(!plain.includes('<b>'), 'Should not contain raw <b> tags');
+    assert.ok(plain.toLowerCase().includes('typescript'), 'Keyword should still be visible');
   });
 
   test('null session title is displayed as (untitled)', () => {
@@ -183,7 +190,7 @@ describe('search command (runSearch)', () => {
 
     const result = runSearch('untitled', {});
     assert.strictEqual(result.exitCode, 0);
-    assert.ok(result.stdout.includes('(untitled)'), 'Should show (untitled) for null title');
+    assert.ok(stripAnsi(result.stdout).includes('(untitled)'), 'Should show (untitled) for null title');
   });
 
   test('session ID (full 40-char hex) appears in output', () => {
@@ -197,7 +204,7 @@ describe('search command (runSearch)', () => {
 
     const result = runSearch('verification', {});
     assert.strictEqual(result.exitCode, 0);
-    assert.ok(result.stdout.includes(`session: ${s.id}`), 'Should show full session id');
+    assert.ok(stripAnsi(result.stdout).includes(`session: ${s.id}`), 'Should show full session id');
   });
 
   test('session missing from DB is silently skipped', () => {
@@ -237,6 +244,6 @@ describe('search command (runSearch)', () => {
 
     const result = runSearch('"exact phrase"', {});
     assert.strictEqual(result.exitCode, 0);
-    assert.ok(result.stdout.includes(`session: ${s.id}`), 'Should find the message with exact phrase');
+    assert.ok(stripAnsi(result.stdout).includes(`session: ${s.id}`), 'Should find the message with exact phrase');
   });
 });

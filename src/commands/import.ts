@@ -7,12 +7,11 @@ import { defaultBasePath as claudeDefaultBasePath, importAll as claudeImportAll,
 import { defaultBasePath as openclawDefaultBasePath, importAll as openclawImportAll, runImportFromPlugin } from '../importers/openclaw';
 import { defaultFilePath as chatgptDefaultFilePath, importFile as chatgptImportFile } from '../importers/chatgpt';
 import { defaultBasePath as codexDefaultBasePath, importAll as codexImportAll } from '../importers/codex';
-import { existsBySourcePath } from '../models/session';
 
 export function runImportFile(agent: AgentSource, filePath: string): { stdout: string; stderr: string; exitCode: number } {
   const absPath = path.resolve(filePath);
   try {
-    let result: { inserted: boolean; messageCount: number };
+    let result: { inserted: boolean; messageCount: number; newMessages: number };
     if (agent === 'claude-code') {
       result = claudeImportFile(absPath);
     } else {
@@ -21,10 +20,13 @@ export function runImportFile(agent: AgentSource, filePath: string): { stdout: s
     if (result.inserted) {
       return { stdout: `Imported 1 session, ${result.messageCount} messages.\n`, stderr: '', exitCode: 0 };
     }
-    if (existsBySourcePath(absPath)) {
-      return { stdout: `Skipped (already imported): ${absPath}\n`, stderr: '', exitCode: 0 };
+    if (result.messageCount === 0) {
+      return { stdout: `Imported 0 sessions, 0 messages.\n`, stderr: '', exitCode: 0 };
     }
-    return { stdout: `Imported 0 sessions, 0 messages.\n`, stderr: '', exitCode: 0 };
+    if (result.newMessages > 0) {
+      return { stdout: `Updated session, ${result.newMessages} new messages.\n`, stderr: '', exitCode: 0 };
+    }
+    return { stdout: `Session up to date (${result.messageCount} messages).\n`, stderr: '', exitCode: 0 };
   } catch (err) {
     return { stdout: '', stderr: (err as Error).message, exitCode: 1 };
   }

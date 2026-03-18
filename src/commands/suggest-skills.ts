@@ -62,9 +62,9 @@ export function runSuggestSkills(opts: {
 
   // Header
   if (agent) {
-    out += `=== Skill Suggestions (${agent}, last ${days} days) ===\n`;
+    out += chalk.bold(`=== Skill Suggestions (${agent}, last ${days} days) ===`) + '\n';
   } else {
-    out += '=== Skill Suggestions ===\n';
+    out += chalk.bold('=== Skill Suggestions ===') + '\n';
   }
 
   if (suggestions.length === 0) {
@@ -84,12 +84,12 @@ export function runSuggestSkills(opts: {
   for (let i = 0; i < suggestions.length; i++) {
     const s = suggestions[i];
     const num = `${i + 1}.`;
-    out += `\n  ${num} "${s.title}"\n`;
-    out += `     Frequency:  ${s.frequency} session${s.frequency === 1 ? '' : 's'} (last ${days} days)\n`;
-    out += `     Agent:      ${s.agents.join(', ')}\n`;
-    out += `     Avg msgs:   ${s.avgMessages}\n`;
-    out += `     Pattern:    ${PATTERN_LABELS[s.pattern]}\n`;
-    out += `     Suggestion: ${chalk.dim(s.suggestion)}\n`;
+    out += `\n  ${num} ${chalk.bold('"' + s.title + '"')}\n`;
+    out += `     ${chalk.dim('Frequency:')}  ${s.frequency} session${s.frequency === 1 ? '' : 's'} (last ${days} days)\n`;
+    out += `     ${chalk.dim('Agent:')}      ${s.agents.join(', ')}\n`;
+    out += `     ${chalk.dim('Avg msgs:')}   ${s.avgMessages}\n`;
+    out += `     ${chalk.dim('Pattern:')}    ${PATTERN_LABELS[s.pattern]}\n`;
+    out += `     ${chalk.dim('Suggestion:')} ${chalk.dim(s.suggestion)}\n`;
   }
 
   out += `\nNo more suggestions.${days < 90 ? ' Run `box0 suggest-skills --days 90` to widen the analysis window.' : ''}\n`;

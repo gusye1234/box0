@@ -16,33 +16,33 @@ Local-first context hub that imports, indexes, and analyzes conversation history
 
 ```bash
 # Install dependencies and build
-npm install
-npm run build
+pnpm install
+pnpm build
 
 # Import sessions from all supported agents
-box0 import claude-code
-box0 import openclaw
-box0 import codex
-box0 import chatgpt --path ~/Downloads/conversations.json
+npx box0 import claude-code
+npx box0 import openclaw
+npx box0 import codex
+npx box0 import chatgpt --path ~/Downloads/conversations.json
 
 # Search across all imported sessions
-box0 search "database migration"
-box0 search "auth" --agent claude-code --limit 20
+npx box0 search "database migration"
+npx box0 search "auth" --agent claude-code --limit 20
 
 # List recent sessions
-box0 list
-box0 list --agent openclaw --sort created
+npx box0 list
+npx box0 list --agent openclaw --sort created
 
 # Install real-time sync plugins
-box0 plugin install claude-code
-box0 plugin install openclaw
-box0 plugin install codex
-box0 plugin status
+npx box0 plugin install claude-code
+npx box0 plugin install openclaw
+npx box0 plugin install codex
+npx box0 plugin status
 
 # View analytics and insights
-box0 stats --days 30
-box0 suggest-skills --min-freq 3
-box0 insight --days 7 --json
+npx box0 stats --days 30
+npx box0 suggest-skills --min-freq 3
+npx box0 insight --days 7 --json
 ```
 
 Data is stored in `~/.box0/box0.db` (SQLite). Override the base directory with the `BOX0_DIR` environment variable.
@@ -51,13 +51,13 @@ Data is stored in `~/.box0/box0.db` (SQLite). Override the base directory with t
 
 ```bash
 # Watch mode (recompile on change)
-npm run dev
+pnpm dev
 
 # Run tests
-npm test
+pnpm test
 
 # Clean build output
-npm run clean
+pnpm clean
 ```
 
 **Stack:** TypeScript (CommonJS), Node >= 20, SQLite via `better-sqlite3`, Commander for CLI, chalk@4 for colors.

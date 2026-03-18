@@ -19,6 +19,9 @@ export function buildHookScript(box0Dir: string, box0BinPath: string): string {
   const template = `#!/bin/bash
 # box0 Claude Code sync hook — auto-generated, do not edit manually
 
+LOG="__BOX0_DIR__/logs/hook.log"
+mkdir -p "$(dirname "$LOG")"
+
 INPUT=$(cat) || exit 0
 
 # Use jq if available, otherwise fall back to python3
@@ -29,13 +32,22 @@ elif command -v python3 >/dev/null 2>&1; then
   STOP_HOOK_ACTIVE=$(echo "$INPUT" | python3 -c "import json,sys; d=json.load(sys.stdin); print(str(d.get('stop_hook_active', False)).lower())" 2>/dev/null) || STOP_HOOK_ACTIVE="false"
   TRANSCRIPT_PATH=$(echo "$INPUT" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('transcript_path', ''))" 2>/dev/null) || TRANSCRIPT_PATH=""
 else
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: neither jq nor python3 available" >> "$LOG"
   exit 0
 fi
 
-[ "$STOP_HOOK_ACTIVE" = "true" ] && exit 0
-[ -z "$TRANSCRIPT_PATH" ] && exit 0
+if [ "$STOP_HOOK_ACTIVE" = "true" ]; then
+  exit 0
+fi
 
-__BOX0_BIN__ import claude-code --file "$TRANSCRIPT_PATH" >> __BOX0_DIR__/logs/hook.log 2>&1 || true
+if [ -z "$TRANSCRIPT_PATH" ]; then
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] WARN: empty transcript_path" >> "$LOG"
+  exit 0
+fi
+
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] importing $TRANSCRIPT_PATH" >> "$LOG"
+__BOX0_BIN__ import claude-code --file "$TRANSCRIPT_PATH" </dev/null >> "$LOG" 2>&1
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] exit=$?" >> "$LOG"
 
 exit 0
 `;
@@ -113,11 +125,12 @@ export function installClaudeCodePlugin(opts?: { whichFn?: (cmd: string) => stri
 
   const box0Dir = getBox0Dir();
   const hooksDir = path.join(box0Dir, 'hooks');
+  const logsDir = path.join(box0Dir, 'logs');
   const hookScriptPath = getHookScriptPath(box0Dir);
   const settingsPath = getSettingsPath();
 
-  // Ensure hooks directory exists
   fs.mkdirSync(hooksDir, { recursive: true });
+  fs.mkdirSync(logsDir, { recursive: true });
 
   // Write hook script
   const scriptContent = buildHookScript(box0Dir, box0BinPath);

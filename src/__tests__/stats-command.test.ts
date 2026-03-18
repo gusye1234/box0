@@ -6,6 +6,10 @@ import * as path from 'path';
 import * as crypto from 'crypto';
 import { Session } from '../types';
 
+function stripAnsi(s: string): string {
+  return s.replace(/\x1B\[[0-9;]*m/g, '');
+}
+
 function makeSession(overrides: Partial<Omit<Session, 'message_count'>> = {}): Omit<Session, 'message_count'> {
   return {
     id: crypto.randomBytes(20).toString('hex'),
@@ -101,10 +105,11 @@ describe('stats command (runStats)', () => {
     const result = runStats({});
     assert.strictEqual(result.exitCode, 0);
     assert.strictEqual(result.stderr, '');
-    assert.ok(result.stdout.includes('=== Box0 Stats ==='));
-    assert.ok(result.stdout.includes('Overview'));
-    assert.ok(result.stdout.includes('Activity (last 30 days)'));
-    assert.ok(result.stdout.includes('Top Tasks (by frequency)'));
+    const plain = stripAnsi(result.stdout);
+    assert.ok(plain.includes('=== Box0 Stats ==='));
+    assert.ok(plain.includes('Overview'));
+    assert.ok(plain.includes('Activity (last 30 days)'));
+    assert.ok(plain.includes('Top Tasks (by frequency)'));
   });
 
   // --- Agent filter ---
@@ -116,8 +121,9 @@ describe('stats command (runStats)', () => {
     insertSession(makeSession({ agent: 'openclaw', title: 'Task' }));
     const result = runStats({ agent: 'claude-code' });
     assert.strictEqual(result.exitCode, 0);
-    assert.ok(result.stdout.includes('=== Box0 Stats (claude-code) ==='));
-    assert.ok(!result.stdout.includes('Agents:'));
+    const plain = stripAnsi(result.stdout);
+    assert.ok(plain.includes('=== Box0 Stats (claude-code) ==='));
+    assert.ok(!plain.includes('Agents:'));
   });
 
   test('agent filter top tasks show no agent tag', () => {
@@ -126,8 +132,8 @@ describe('stats command (runStats)', () => {
     insertSession(makeSession({ agent: 'claude-code', title: 'My task' }));
     const result = runStats({ agent: 'claude-code' });
     assert.strictEqual(result.exitCode, 0);
-    // Top tasks should not contain [claude-code] bracket tag
-    const topSection = result.stdout.split('Top Tasks')[1];
+    const plain = stripAnsi(result.stdout);
+    const topSection = plain.split('Top Tasks')[1];
     assert.ok(!topSection.includes('[claude-code]'));
   });
 
@@ -139,7 +145,7 @@ describe('stats command (runStats)', () => {
     insertSession(makeSession({ title: 'Task' }));
     const result = runStats({ days: '7' });
     assert.strictEqual(result.exitCode, 0);
-    assert.ok(result.stdout.includes('Activity (last 7 days)'));
+    assert.ok(stripAnsi(result.stdout).includes('Activity (last 7 days)'));
   });
 
   // --- Top limit ---
@@ -152,8 +158,8 @@ describe('stats command (runStats)', () => {
     }
     const result = runStats({ top: '2' });
     assert.strictEqual(result.exitCode, 0);
-    const topSection = result.stdout.split('Top Tasks (by frequency)')[1];
-    // Should have at most 2 numbered items
+    const plain = stripAnsi(result.stdout);
+    const topSection = plain.split('Top Tasks (by frequency)')[1];
     const numberedLines = topSection.split('\n').filter((l: string) => /^\s+\d+\./.test(l));
     assert.strictEqual(numberedLines.length, 2);
   });
@@ -163,7 +169,6 @@ describe('stats command (runStats)', () => {
   test('large numbers display with comma separators', () => {
     const { insertSession, incrementMessageCount } = require('../models/session');
     const { runStats } = require('../commands/stats');
-    // Create sessions with enough messages
     for (let i = 0; i < 3; i++) {
       const s = makeSession({ title: `Task ${i}` });
       insertSession(s);
@@ -171,7 +176,7 @@ describe('stats command (runStats)', () => {
     }
     const result = runStats({});
     assert.strictEqual(result.exitCode, 0);
-    assert.ok(result.stdout.includes('4,500'));
+    assert.ok(stripAnsi(result.stdout).includes('4,500'));
   });
 
   // --- Avg formatting ---
@@ -188,7 +193,7 @@ describe('stats command (runStats)', () => {
     const result = runStats({});
     assert.strictEqual(result.exitCode, 0);
     // 21/2 = 10.5
-    assert.ok(result.stdout.includes('10.5'));
+    assert.ok(stripAnsi(result.stdout).includes('10.5'));
   });
 
   // --- Null titles ---

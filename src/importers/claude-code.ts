@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { Session, Message, ImportStats } from '../types';
-import { insertSession } from '../models/session';
+import { upsertSession } from '../models/session';
 import { insertBatch } from '../models/message';
 
 interface ContentBlock {
@@ -90,17 +90,14 @@ export function buildSession(filePath: string, entries: RawEntry[]): Session {
   };
 }
 
-export function importFile(filePath: string): { inserted: boolean; messageCount: number } {
+export function importFile(filePath: string): { inserted: boolean; messageCount: number; newMessages: number } {
   const entries = parseJSONLFile(filePath);
   if (entries.length === 0) {
-    return { inserted: false, messageCount: 0 };
+    return { inserted: false, messageCount: 0, newMessages: 0 };
   }
 
   const session = buildSession(filePath, entries);
-  const { inserted } = insertSession(session);
-  if (!inserted) {
-    return { inserted: false, messageCount: 0 };
-  }
+  const { inserted } = upsertSession(session);
 
   const messages: Message[] = entries.map((entry, seq) => ({
     id: `${session.id}:${seq}`,
@@ -111,8 +108,8 @@ export function importFile(filePath: string): { inserted: boolean; messageCount:
     timestamp: entry.timestamp ? new Date(entry.timestamp).getTime() : null,
   }));
 
-  insertBatch(messages);
-  return { inserted: true, messageCount: messages.length };
+  const { inserted: newMessages } = insertBatch(messages);
+  return { inserted, messageCount: messages.length, newMessages };
 }
 
 export interface ProjectProgress {
@@ -178,10 +175,10 @@ export function importAll(
       projFiles++;
       sessions++;
       const result = importFile(filePath);
-      if (result.inserted) {
+      if (result.inserted || result.newMessages > 0) {
         projInserted++;
         inserted++;
-        messages += result.messageCount;
+        messages += result.newMessages;
       } else {
         projSkipped++;
         skipped++;

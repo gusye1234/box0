@@ -6,6 +6,10 @@ import * as path from 'path';
 import * as crypto from 'crypto';
 import { Session } from '../types';
 
+function stripAnsi(s: string): string {
+  return s.replace(/\x1B\[[0-9;]*m/g, '');
+}
+
 function makeSession(overrides: Partial<Omit<Session, 'message_count'>> = {}): Omit<Session, 'message_count'> {
   return {
     id: crypto.randomBytes(20).toString('hex'),
@@ -61,7 +65,8 @@ describe('list command (runList)', () => {
     const result = runList({});
     assert.strictEqual(result.exitCode, 0);
     assert.strictEqual(result.stderr, '');
-    const lines = result.stdout.split('\n').filter((l: string) => l.trim() !== '');
+    const plain = stripAnsi(result.stdout);
+    const lines = plain.split('\n').filter((l: string) => l.trim() !== '');
     // Header + 3 rows
     assert.ok(lines.length >= 4);
     // sC has highest updated_at so should appear first
@@ -79,10 +84,11 @@ describe('list command (runList)', () => {
     const result = runList({ agent: 'claude-code' });
     assert.strictEqual(result.exitCode, 0);
     assert.strictEqual(result.stderr, '');
-    assert.ok(result.stdout.includes('claude-code'));
-    assert.ok(!result.stdout.includes('openclaw'));
+    const plain = stripAnsi(result.stdout);
+    assert.ok(plain.includes('claude-code'));
+    assert.ok(!plain.includes('openclaw'));
     // Should show 2 claude-code rows
-    const rows = result.stdout.split('\n').filter((l: string) => l.includes('msgs'));
+    const rows = plain.split('\n').filter((l: string) => l.includes('msgs'));
     assert.strictEqual(rows.length, 2);
   });
 
@@ -103,7 +109,7 @@ describe('list command (runList)', () => {
     const result = runList({ limit: '2' });
     assert.strictEqual(result.exitCode, 0);
     assert.strictEqual(result.stderr, '');
-    const rows = result.stdout.split('\n').filter((l: string) => l.includes('msgs'));
+    const rows = stripAnsi(result.stdout).split('\n').filter((l: string) => l.includes('msgs'));
     assert.strictEqual(rows.length, 2);
   });
 
@@ -140,7 +146,7 @@ describe('list command (runList)', () => {
     const result = runList({ limit: 2 });
     assert.strictEqual(result.exitCode, 0);
     assert.strictEqual(result.stderr, '');
-    const rows = result.stdout.split('\n').filter((l: string) => l.includes('msgs'));
+    const rows = stripAnsi(result.stdout).split('\n').filter((l: string) => l.includes('msgs'));
     assert.strictEqual(rows.length, 2);
   });
 
@@ -155,7 +161,7 @@ describe('list command (runList)', () => {
     const result = runList({ sort: 'created' });
     assert.strictEqual(result.exitCode, 0);
     assert.strictEqual(result.stderr, '');
-    const rows = result.stdout.split('\n').filter((l: string) => l.includes('msgs'));
+    const rows = stripAnsi(result.stdout).split('\n').filter((l: string) => l.includes('msgs'));
     // sB has the highest created_at so comes first
     assert.ok(rows[0].includes(sB.id.slice(0, 8)));
     assert.ok(rows[1].includes(sA.id.slice(0, 8)));
@@ -172,7 +178,7 @@ describe('list command (runList)', () => {
     const result = runList({});
     assert.strictEqual(result.exitCode, 0);
     assert.strictEqual(result.stderr, '');
-    const rows = result.stdout.split('\n').filter((l: string) => l.includes('msgs'));
+    const rows = stripAnsi(result.stdout).split('\n').filter((l: string) => l.includes('msgs'));
     // sA has the highest updated_at so comes first
     assert.ok(rows[0].includes(sA.id.slice(0, 8)));
     assert.ok(rows[1].includes(sB.id.slice(0, 8)));
@@ -192,7 +198,7 @@ describe('list command (runList)', () => {
     insertSession(makeSession({ title: null as any }));
     const result = runList({});
     assert.strictEqual(result.exitCode, 0);
-    assert.ok(result.stdout.includes('(untitled)'));
+    assert.ok(stripAnsi(result.stdout).includes('(untitled)'));
   });
 
   test('header line contains total, limit, and sort', () => {
@@ -202,7 +208,7 @@ describe('list command (runList)', () => {
     insertSession(makeSession({ agent: 'claude-code' }));
     const result = runList({ agent: 'claude-code', sort: 'created' });
     assert.strictEqual(result.exitCode, 0);
-    const header = result.stdout.split('\n')[0];
+    const header = stripAnsi(result.stdout.split('\n')[0]);
     assert.ok(header.includes('2 total'));
     assert.ok(header.includes('agent: claude-code'));
     assert.ok(header.includes('sorted by: created'));
@@ -215,7 +221,7 @@ describe('list command (runList)', () => {
     insertSession(s);
     const result = runList({});
     assert.strictEqual(result.exitCode, 0);
-    assert.ok(result.stdout.includes('abcdef12…'));
+    assert.ok(stripAnsi(result.stdout).includes('abcdef12…'));
   });
 
   test('agent + limit where total > limit shows true total in header', () => {
@@ -226,7 +232,7 @@ describe('list command (runList)', () => {
     }
     const result = runList({ agent: 'claude-code', limit: '2' });
     assert.strictEqual(result.exitCode, 0);
-    const header = result.stdout.split('\n')[0];
+    const header = stripAnsi(result.stdout.split('\n')[0]);
     assert.ok(header.includes('5 total'));
     assert.ok(header.includes('showing 2'));
   });
@@ -238,8 +244,9 @@ describe('list command (runList)', () => {
     const updated2026 = new Date('2026-03-17T00:00:00Z').getTime();
     insertSession(makeSession({ created_at: created2020, updated_at: updated2026 }));
     const resultCreated = runList({ sort: 'created' });
-    assert.ok(resultCreated.stdout.includes('2020-'));
-    assert.ok(!resultCreated.stdout.split('\n').some((l: string) => l.includes('msgs') && l.includes('2026-')));
+    const plain = stripAnsi(resultCreated.stdout);
+    assert.ok(plain.includes('2020-'));
+    assert.ok(!plain.split('\n').some((l: string) => l.includes('msgs') && l.includes('2026-')));
   });
 
   test('title truncation at 40 chars', () => {
@@ -249,9 +256,10 @@ describe('list command (runList)', () => {
     insertSession(makeSession({ title: longTitle }));
     const result = runList({});
     assert.strictEqual(result.exitCode, 0);
+    const plain = stripAnsi(result.stdout);
     // The output should contain exactly 40 A's (truncated), not 50
-    assert.ok(result.stdout.includes('A'.repeat(40)));
-    assert.ok(!result.stdout.includes('A'.repeat(41)));
+    assert.ok(plain.includes('A'.repeat(40)));
+    assert.ok(!plain.includes('A'.repeat(41)));
   });
 
   test('unfiltered total > limit shows true total in header', () => {
@@ -262,7 +270,7 @@ describe('list command (runList)', () => {
     }
     const result = runList({ limit: '3' });
     assert.strictEqual(result.exitCode, 0);
-    const header = result.stdout.split('\n')[0];
+    const header = stripAnsi(result.stdout.split('\n')[0]);
     assert.ok(header.includes('5 total'));
     assert.ok(header.includes('showing 3'));
   });

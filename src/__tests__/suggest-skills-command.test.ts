@@ -6,6 +6,10 @@ import * as path from 'path';
 import * as crypto from 'crypto';
 import { Session } from '../types';
 
+function stripAnsi(s: string): string {
+  return s.replace(/\x1B\[[0-9;]*m/g, '');
+}
+
 function makeSession(overrides: Partial<Omit<Session, 'message_count'>> = {}): Omit<Session, 'message_count'> {
   return {
     id: crypto.randomBytes(20).toString('hex'),
@@ -140,15 +144,16 @@ describe('suggest-skills command (runSuggestSkills)', () => {
     const result = runSuggestSkills({});
     assert.strictEqual(result.exitCode, 0);
     assert.strictEqual(result.stderr, '');
-    assert.ok(result.stdout.includes('=== Skill Suggestions ==='));
-    assert.ok(result.stdout.includes('Found 1 workflow pattern'));
-    assert.ok(result.stdout.includes('1.'));
-    assert.ok(result.stdout.includes('"Fix login flow"'));
-    assert.ok(result.stdout.includes('Frequency:'));
-    assert.ok(result.stdout.includes('Agent:'));
-    assert.ok(result.stdout.includes('Avg msgs:'));
-    assert.ok(result.stdout.includes('Pattern:'));
-    assert.ok(result.stdout.includes('Suggestion:'));
+    const plain = stripAnsi(result.stdout);
+    assert.ok(plain.includes('=== Skill Suggestions ==='));
+    assert.ok(plain.includes('Found 1 workflow pattern'));
+    assert.ok(plain.includes('1.'));
+    assert.ok(plain.includes('"Fix login flow"'));
+    assert.ok(plain.includes('Frequency:'));
+    assert.ok(plain.includes('Agent:'));
+    assert.ok(plain.includes('Avg msgs:'));
+    assert.ok(plain.includes('Pattern:'));
+    assert.ok(plain.includes('Suggestion:'));
   });
 
   // --- Agent filter ---
@@ -160,7 +165,7 @@ describe('suggest-skills command (runSuggestSkills)', () => {
     insertSession(makeSession({ title: 'Task', agent: 'claude-code' }));
     const result = runSuggestSkills({ agent: 'claude-code' });
     assert.strictEqual(result.exitCode, 0);
-    assert.ok(result.stdout.includes('=== Skill Suggestions (claude-code'));
+    assert.ok(stripAnsi(result.stdout).includes('=== Skill Suggestions (claude-code'));
   });
 
   // --- JSON output ---

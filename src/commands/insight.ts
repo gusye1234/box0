@@ -1,7 +1,9 @@
 import { Command } from 'commander';
+import chalk from 'chalk';
 import { AgentSource } from '../types';
 import { generateInsight, InsightReport } from '../models/insights';
 import { getOverview } from '../models/stats';
+import { formatNumber, formatDelta, sectionHeader } from '../lib/format';
 
 const VALID_AGENTS = ['claude-code', 'openclaw', 'codex', 'chatgpt'] as const;
 
@@ -9,16 +11,6 @@ export interface RunInsightResult {
   stdout: string;
   stderr: string;
   exitCode: number;
-}
-
-function formatNumber(n: number): string {
-  return n.toLocaleString('en-US');
-}
-
-function formatDelta(delta: number | null): string {
-  if (delta === null) return 'N/A';
-  const pct = Math.round(delta * 100);
-  return pct >= 0 ? `+${pct}%` : `${pct}%`;
 }
 
 export function runInsight(opts: {
@@ -91,33 +83,33 @@ export function runInsight(opts: {
 
   // Header
   if (agent) {
-    out += `=== Box0 Insight Report (${agent}, last ${days} days) ===\n`;
+    out += chalk.bold(`=== Box0 Insight Report (${agent}, last ${days} days) ===`) + '\n';
   } else {
-    out += `=== Box0 Insight Report ===\n`;
+    out += chalk.bold(`=== Box0 Insight Report ===`) + '\n';
   }
 
   // Overview section
-  out += `\nOverview (last ${days} days)\n`;
-  out += `  Sessions:         ${formatNumber(report.overview.sessions)}\n`;
-  out += `  Messages:         ${formatNumber(report.overview.messages)}\n`;
+  out += '\n' + sectionHeader(`Overview (last ${days} days)`) + '\n';
+  out += `  ${chalk.dim('Sessions:')}         ${formatNumber(report.overview.sessions)}\n`;
+  out += `  ${chalk.dim('Messages:')}         ${formatNumber(report.overview.messages)}\n`;
   if (report.overview.agents && report.overview.agents.length > 0) {
     const parts = report.overview.agents.map((d) => `${d.agent} (${formatNumber(d.count)})`);
-    out += `  Agents:           ${parts.join(', ')}\n`;
+    out += `  ${chalk.dim('Agents:')}           ${parts.join(', ')}\n`;
   }
-  out += `  Avg msgs/session: ${report.overview.avgMessagesPerSession.toFixed(1)}\n`;
+  out += `  ${chalk.dim('Avg msgs/session:')} ${report.overview.avgMessagesPerSession.toFixed(1)}\n`;
   if (report.overview.mostActiveDay) {
-    out += `  Most active day:  ${report.overview.mostActiveDay.date} (${formatNumber(report.overview.mostActiveDay.count)} sessions)\n`;
+    out += `  ${chalk.dim('Most active day:')}  ${report.overview.mostActiveDay.date} (${formatNumber(report.overview.mostActiveDay.count)} sessions)\n`;
   }
 
   // Trends section
-  out += '\nTrends\n';
-  out += `  vs previous ${days} days: sessions ${formatDelta(report.trends.sessionsDelta)}, messages ${formatDelta(report.trends.messagesDelta)}\n`;
+  out += '\n' + sectionHeader('Trends') + '\n';
+  out += `  ${chalk.dim('vs previous ' + days + ' days:')} sessions ${formatDelta(report.trends.sessionsDelta)}, messages ${formatDelta(report.trends.messagesDelta)}\n`;
   if (report.trends.busiestDayOfWeek) {
-    out += `  Busiest day of week: ${report.trends.busiestDayOfWeek.day} (avg ${report.trends.busiestDayOfWeek.avgSessions.toFixed(1)} sessions)\n`;
+    out += `  ${chalk.dim('Busiest day of week:')} ${report.trends.busiestDayOfWeek.day} (avg ${report.trends.busiestDayOfWeek.avgSessions.toFixed(1)} sessions)\n`;
   }
 
   // Top Recurring Tasks section
-  out += '\nTop Recurring Tasks\n';
+  out += '\n' + sectionHeader('Top Recurring Tasks') + '\n';
   if (report.topTasks.length === 0) {
     out += '  No recurring tasks found.\n';
   } else {
@@ -127,13 +119,13 @@ export function runInsight(opts: {
       const num = `${i + 1}.`.padEnd(maxIdx + 1);
       const titleStr = `"${task.title}"`;
       const countStr = `\u00d7 ${task.count} session${task.count === 1 ? '' : 's'}`;
-      const agentTag = agent ? '' : `  [${task.latestAgent}]`;
-      out += `  ${num} ${titleStr.padEnd(40)} ${countStr}${agentTag}\n`;
+      const agentTagStr = agent ? '' : `  [${task.latestAgent}]`;
+      out += `  ${num} ${titleStr.padEnd(40)} ${countStr}${agentTagStr}\n`;
     }
   }
 
   // Skill Suggestions section
-  out += '\nSkill Suggestions\n';
+  out += '\n' + sectionHeader('Skill Suggestions') + '\n';
   if (report.skillSuggestions.length === 0) {
     out += '  No skill suggestions found.\n';
   } else {

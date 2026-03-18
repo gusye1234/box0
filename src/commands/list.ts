@@ -1,6 +1,8 @@
 import { Command } from 'commander';
+import chalk from 'chalk';
 import * as session from '../models/session';
 import { AgentSource } from '../types';
+import { formatDateTime, agentTag } from '../lib/format';
 
 const VALID_AGENTS = ['claude-code', 'openclaw', 'codex', 'chatgpt'] as const;
 const VALID_SORTS = ['updated', 'created'] as const;
@@ -47,7 +49,7 @@ export function runList(opts: { agent?: string; limit?: string | number; sort?: 
 
   // Build header
   const agentPart = agent ? `  ·  agent: ${agent}` : '';
-  let stdout = `Sessions (${total} total, showing ${limit})${agentPart}  ·  sorted by: ${sort}\n`;
+  let stdout = chalk.bold(`Sessions (${total} total, showing ${limit})${agentPart}  ·  sorted by: ${sort}`) + '\n';
 
   if (rows.length === 0) {
     stdout = 'No sessions found. Run `box0 import` to get started.\n';
@@ -58,13 +60,13 @@ export function runList(opts: { agent?: string; limit?: string | number; sort?: 
 
   for (const row of rows) {
     const dateMs = sort === 'created' ? row.created_at : row.updated_at;
-    const date = new Date(dateMs).toISOString().slice(0, 10);
-    const agentPadded = row.agent.padEnd(10);
+    const date = chalk.dim(formatDateTime(dateMs));
+    const tag = agentTag(row.agent);
     const rawTitle = row.title ?? '(untitled)';
     const title = rawTitle.length > 40 ? rawTitle.slice(0, 40) : rawTitle.padEnd(40);
-    const msgCount = String(row.message_count).padStart(4);
-    const idPrefix = row.id.slice(0, 8);
-    stdout += `${date}  [${agentPadded}]  ${title}  ${msgCount} msgs  ${idPrefix}…\n`;
+    const msgCount = chalk.dim(String(row.message_count).padStart(4) + ' msgs');
+    const idPrefix = chalk.dim(row.id.slice(0, 8) + '…');
+    stdout += `${date}  ${tag}  ${title}  ${msgCount}  ${idPrefix}\n`;
   }
 
   return { stdout, stderr: '', exitCode: 0 };

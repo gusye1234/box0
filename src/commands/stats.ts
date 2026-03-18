@@ -1,6 +1,8 @@
 import { Command } from 'commander';
+import chalk from 'chalk';
 import { AgentSource } from '../types';
 import * as statsModel from '../models/stats';
+import { formatNumber, sectionHeader } from '../lib/format';
 
 const VALID_AGENTS = ['claude-code', 'openclaw', 'codex', 'chatgpt'] as const;
 
@@ -8,10 +10,6 @@ export interface RunStatsResult {
   stdout: string;
   stderr: string;
   exitCode: number;
-}
-
-function formatNumber(n: number): string {
-  return n.toLocaleString('en-US');
 }
 
 export function runStats(opts: { agent?: string; days?: string | number; top?: string | number }): RunStatsResult {
@@ -60,33 +58,33 @@ export function runStats(opts: { agent?: string; days?: string | number; top?: s
 
   // Header
   if (agent) {
-    out += `=== Box0 Stats (${agent}) ===\n`;
+    out += chalk.bold(`=== Box0 Stats (${agent}) ===`) + '\n';
   } else {
-    out += '=== Box0 Stats ===\n';
+    out += chalk.bold('=== Box0 Stats ===') + '\n';
   }
 
   // Overview section
-  out += '\nOverview\n';
-  out += `  Total sessions:   ${formatNumber(overview.totalSessions)}\n`;
-  out += `  Total messages:   ${formatNumber(overview.totalMessages)}\n`;
-  out += `  Avg msgs/session: ${overview.avgMessagesPerSession.toFixed(1)}\n`;
+  out += '\n' + sectionHeader('Overview') + '\n';
+  out += `  ${chalk.dim('Total sessions:')}   ${formatNumber(overview.totalSessions)}\n`;
+  out += `  ${chalk.dim('Total messages:')}   ${formatNumber(overview.totalMessages)}\n`;
+  out += `  ${chalk.dim('Avg msgs/session:')} ${overview.avgMessagesPerSession.toFixed(1)}\n`;
 
   if (agentDistribution && agentDistribution.length > 0) {
     const parts = agentDistribution.map((d) => `${d.agent} (${formatNumber(d.count)})`);
-    out += `  Agents:           ${parts.join(', ')}\n`;
+    out += `  ${chalk.dim('Agents:')}           ${parts.join(', ')}\n`;
   }
 
   // Activity section
-  out += `\nActivity (last ${days} days)\n`;
-  out += `  Sessions:         ${formatNumber(activity.sessions)}\n`;
-  out += `  Messages:         ${formatNumber(activity.messages)}\n`;
-  out += `  Avg msgs/session: ${activity.avgMessagesPerSession.toFixed(1)}\n`;
+  out += '\n' + sectionHeader(`Activity (last ${days} days)`) + '\n';
+  out += `  ${chalk.dim('Sessions:')}         ${formatNumber(activity.sessions)}\n`;
+  out += `  ${chalk.dim('Messages:')}         ${formatNumber(activity.messages)}\n`;
+  out += `  ${chalk.dim('Avg msgs/session:')} ${activity.avgMessagesPerSession.toFixed(1)}\n`;
   if (activity.mostActiveDay) {
-    out += `  Most active day:  ${activity.mostActiveDay.date} (${formatNumber(activity.mostActiveDay.count)} sessions)\n`;
+    out += `  ${chalk.dim('Most active day:')}  ${activity.mostActiveDay.date} (${formatNumber(activity.mostActiveDay.count)} sessions)\n`;
   }
 
   // Top Tasks section
-  out += '\nTop Tasks (by frequency)\n';
+  out += '\n' + sectionHeader('Top Tasks (by frequency)') + '\n';
   if (topTasks.length === 0) {
     out += '  No recurring tasks found.\n';
   } else {
@@ -96,8 +94,8 @@ export function runStats(opts: { agent?: string; days?: string | number; top?: s
       const num = `${i + 1}.`.padEnd(maxIdx + 1);
       const titleStr = `"${task.title}"`;
       const countStr = `\u00d7 ${task.count} session${task.count === 1 ? '' : 's'}`;
-      const agentTag = agent ? '' : `  [${task.latestAgent}]`;
-      out += `  ${num} ${titleStr.padEnd(40)} ${countStr}${agentTag}\n`;
+      const agentTagStr = agent ? '' : `  [${task.latestAgent}]`;
+      out += `  ${num} ${titleStr.padEnd(40)} ${countStr}${agentTagStr}\n`;
     }
   }
 

@@ -5,6 +5,7 @@ import * as message from '../models/message';
 import * as session from '../models/session';
 import { getDb } from '../lib/db';
 import { AgentSource } from '../types';
+import { formatDate, agentColor } from '../lib/format';
 
 const VALID_AGENTS = ['claude-code', 'openclaw', 'codex', 'chatgpt'] as const;
 
@@ -75,7 +76,7 @@ export function runSearch(
     const s = session.findById(r.session_id);
     if (s === undefined) continue;
     const title = s.title ?? '(untitled)';
-    const date = new Date(s.created_at).toISOString().slice(0, 10);
+    const date = formatDate(s.created_at);
     const snippet = r.snippet.replace(/<b>(.*?)<\/b>/g, (_: string, m: string) => chalk.bold(m));
     enriched.push({ agent: r.agent, title, date, snippet, sessionId: r.session_id });
   }
@@ -87,11 +88,11 @@ export function runSearch(
   if (enriched.length === 0) {
     stdout += `No results found for "${query}".\n`;
   } else {
-    stdout += `\nFound ${enriched.length} result(s) for "${query}"${agentNote}\n`;
+    stdout += chalk.bold(`\nFound ${enriched.length} result(s) for "${query}"${agentNote}`) + '\n';
     for (const e of enriched) {
-      stdout += `\n[${e.agent}]  ${e.title}  ·  ${e.date}\n`;
+      stdout += `\n[${agentColor(e.agent)}]  ${e.title}  ·  ${chalk.dim(e.date)}\n`;
       stdout += `  ${e.snippet}\n`;
-      stdout += `  session: ${e.sessionId}\n`;
+      stdout += `  ${chalk.dim('session: ' + e.sessionId)}\n`;
     }
   }
 

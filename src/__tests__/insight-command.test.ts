@@ -6,6 +6,10 @@ import * as path from 'path';
 import * as crypto from 'crypto';
 import { Session } from '../types';
 
+function stripAnsi(s: string): string {
+  return s.replace(/\x1B\[[0-9;]*m/g, '');
+}
+
 function makeSession(overrides: Partial<Omit<Session, 'message_count'>> = {}): Omit<Session, 'message_count'> {
   return {
     id: crypto.randomBytes(20).toString('hex'),
@@ -132,11 +136,12 @@ describe('insight command (runInsight)', () => {
     const result = runInsight({});
     assert.strictEqual(result.exitCode, 0);
     assert.strictEqual(result.stderr, '');
-    assert.ok(result.stdout.includes('=== Box0 Insight Report ==='));
-    assert.ok(result.stdout.includes('Overview (last 30 days)'));
-    assert.ok(result.stdout.includes('Trends'));
-    assert.ok(result.stdout.includes('Top Recurring Tasks'));
-    assert.ok(result.stdout.includes('Skill Suggestions'));
+    const plain = stripAnsi(result.stdout);
+    assert.ok(plain.includes('=== Box0 Insight Report ==='));
+    assert.ok(plain.includes('Overview (last 30 days)'));
+    assert.ok(plain.includes('Trends'));
+    assert.ok(plain.includes('Top Recurring Tasks'));
+    assert.ok(plain.includes('Skill Suggestions'));
   });
 
   // --- Agent filter ---
@@ -148,8 +153,9 @@ describe('insight command (runInsight)', () => {
     insertSession(makeSession({ agent: 'openclaw', title: 'Task' }));
     const result = runInsight({ agent: 'claude-code' });
     assert.strictEqual(result.exitCode, 0);
-    assert.ok(result.stdout.includes('=== Box0 Insight Report (claude-code'));
-    assert.ok(!result.stdout.includes('Agents:'));
+    const plain = stripAnsi(result.stdout);
+    assert.ok(plain.includes('=== Box0 Insight Report (claude-code'));
+    assert.ok(!plain.includes('Agents:'));
   });
 
   // --- Days filter ---
@@ -160,8 +166,9 @@ describe('insight command (runInsight)', () => {
     insertSession(makeSession({ title: 'Task' }));
     const result = runInsight({ days: '7' });
     assert.strictEqual(result.exitCode, 0);
-    assert.ok(result.stdout.includes('Overview (last 7 days)'));
-    assert.ok(result.stdout.includes('vs previous 7 days'));
+    const plain = stripAnsi(result.stdout);
+    assert.ok(plain.includes('Overview (last 7 days)'));
+    assert.ok(plain.includes('vs previous 7 days'));
   });
 
   // --- Top limit ---
@@ -176,12 +183,11 @@ describe('insight command (runInsight)', () => {
     }
     const result = runInsight({ top: '2' });
     assert.strictEqual(result.exitCode, 0);
-    // Check top recurring tasks section
-    const tasksSection = result.stdout.split('Top Recurring Tasks')[1].split('Skill Suggestions')[0];
+    const plain = stripAnsi(result.stdout);
+    const tasksSection = plain.split('Top Recurring Tasks')[1].split('Skill Suggestions')[0];
     const taskLines = tasksSection.split('\n').filter((l: string) => /^\s+\d+\./.test(l));
     assert.ok(taskLines.length <= 2);
-    // Check skill suggestions section
-    const skillsSection = result.stdout.split('Skill Suggestions')[1].split('\nRun')[0];
+    const skillsSection = plain.split('Skill Suggestions')[1].split('\nRun')[0];
     const skillLines = skillsSection.split('\n').filter((l: string) => /^\s+\d+\./.test(l));
     assert.ok(skillLines.length <= 2);
   });
@@ -235,7 +241,7 @@ describe('insight command (runInsight)', () => {
     }
     const result = runInsight({ days: '30' });
     assert.strictEqual(result.exitCode, 0);
-    assert.ok(result.stdout.includes('+100%'));
+    assert.ok(stripAnsi(result.stdout).includes('+100%'));
   });
 
   test('trend delta N/A when no previous period data', () => {
@@ -244,7 +250,7 @@ describe('insight command (runInsight)', () => {
     insertSession(makeSession({ title: 'Task' }));
     const result = runInsight({});
     assert.strictEqual(result.exitCode, 0);
-    assert.ok(result.stdout.includes('N/A'));
+    assert.ok(stripAnsi(result.stdout).includes('N/A'));
   });
 
   // --- Footer hints ---
@@ -255,8 +261,9 @@ describe('insight command (runInsight)', () => {
     insertSession(makeSession({ agent: 'claude-code', title: 'Task' }));
     const result = runInsight({ agent: 'claude-code' });
     assert.strictEqual(result.exitCode, 0);
-    assert.ok(result.stdout.includes('box0 stats --agent claude-code'));
-    assert.ok(result.stdout.includes('box0 suggest-skills --agent claude-code'));
+    const plain = stripAnsi(result.stdout);
+    assert.ok(plain.includes('box0 stats --agent claude-code'));
+    assert.ok(plain.includes('box0 suggest-skills --agent claude-code'));
   });
 
   test('footer hints without agent filter', () => {
@@ -265,8 +272,9 @@ describe('insight command (runInsight)', () => {
     insertSession(makeSession({ title: 'Task' }));
     const result = runInsight({});
     assert.strictEqual(result.exitCode, 0);
-    assert.ok(result.stdout.includes('Run `box0 stats`'));
-    assert.ok(result.stdout.includes('Run `box0 suggest-skills`'));
+    const plain = stripAnsi(result.stdout);
+    assert.ok(plain.includes('Run `box0 stats`'));
+    assert.ok(plain.includes('Run `box0 suggest-skills`'));
   });
 
   // --- Success paths ---

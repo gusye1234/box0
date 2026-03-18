@@ -69,7 +69,7 @@ describe('runImportFile', () => {
     assert.strictEqual(result.stdout, '');
   });
 
-  test('duplicate import is idempotent (second call returns Skipped)', () => {
+  test('duplicate import is idempotent (second call returns up to date)', () => {
     const { runImportFile } = require('../commands/import');
     const fixturePath = path.join(fixtureDir, `dedup-${crypto.randomBytes(4).toString('hex')}.jsonl`);
     writeJSONL(fixturePath, [
@@ -81,7 +81,7 @@ describe('runImportFile', () => {
 
     const second = runImportFile('claude-code', fixturePath);
     assert.strictEqual(second.exitCode, 0);
-    assert.match(second.stdout, new RegExp(`^Skipped \\(already imported\\): ${path.resolve(fixturePath).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\n$`));
+    assert.match(second.stdout, /^Session up to date/);
   });
 
   test('empty/invalid JSONL file (0 parseable entries) returns 0 sessions imported', () => {
