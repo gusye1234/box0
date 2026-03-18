@@ -1,0 +1,32 @@
+{
+  "name": "box0",
+  "version": "0.1.0",
+  "description": "Agent Native Dropbox — local-first context + file sync across AI agents",
+  "type": "commonjs",
+  "main": "dist/index.js",
+  "bin": {
+    "box0": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "clean": "rm -rf dist",
+    "test": "node --require ts-node/register --test src/__tests__/**/*.test.ts"
+  },
+  "dependencies": {
+    "@iarna/toml": "^2.2.5",
+    "better-sqlite3": "^12.8.0",
+    "chalk": "4.1.2",
+    "commander": "12.1.0",
+    "ora": "5.4.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "22.13.10",
+    "ts-node": "10.9.2",
+    "typescript": "5.7.3"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
