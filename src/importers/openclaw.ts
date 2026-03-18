@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { Session, Message } from '../types';
-import { insertSession, upsertSession } from '../models/session';
+import { upsertSession } from '../models/session';
 import { insertBatch } from '../models/message';
 
 // ─── Local interfaces ────────────────────────────────────────────────────────
@@ -140,18 +140,15 @@ export function buildSession(
 
 // ─── importFile ───────────────────────────────────────────────────────────────
 
-export function importFile(filePath: string): { inserted: boolean; messageCount: number } {
+export function importFile(filePath: string): { inserted: boolean; messageCount: number; newMessages: number } {
   const { sessionEvent, messageEvents } = parseJSONLFile(filePath);
 
   if (sessionEvent === null || messageEvents.length === 0) {
-    return { inserted: false, messageCount: 0 };
+    return { inserted: false, messageCount: 0, newMessages: 0 };
   }
 
   const session = buildSession(filePath, sessionEvent, messageEvents);
-  const { inserted } = insertSession(session);
-  if (!inserted) {
-    return { inserted: false, messageCount: 0 };
-  }
+  const { inserted } = upsertSession(session);
 
   const messages: Message[] = messageEvents.map((ev, seq) => ({
     id: `${session.id}:${seq}`,
@@ -162,8 +159,8 @@ export function importFile(filePath: string): { inserted: boolean; messageCount:
     timestamp: ev.message.timestamp ?? (ev.timestamp ? new Date(ev.timestamp).getTime() : null),
   }));
 
-  insertBatch(messages);
-  return { inserted: true, messageCount: messages.length };
+  const { inserted: newMessages } = insertBatch(messages);
+  return { inserted, messageCount: messages.length, newMessages };
 }
 
 // ─── extractTextFromRawMessage ────────────────────────────────────────────────
@@ -275,9 +272,9 @@ export function importAll(
     const filePath = path.join(basePath, name);
     const result = importFile(filePath);
 
-    if (result.inserted) {
+    if (result.inserted || result.newMessages > 0) {
       inserted++;
-      messages += result.messageCount;
+      messages += result.newMessages;
     } else {
       skipped++;
     }

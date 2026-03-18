@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { Session, Message } from '../types';
-import { insertSession } from '../models/session';
+import { upsertSession } from '../models/session';
 import { insertBatch } from '../models/message';
 
 // ─── Local interfaces ─────────────────────────────────────────────────────────
@@ -139,18 +139,15 @@ export function buildSession(
 
 // ─── importFile ───────────────────────────────────────────────────────────────
 
-export function importFile(filePath: string): { inserted: boolean; messageCount: number } {
+export function importFile(filePath: string): { inserted: boolean; messageCount: number; newMessages: number } {
   const { threadStarted, items } = parseJSONLFile(filePath);
 
   if (items.length === 0) {
-    return { inserted: false, messageCount: 0 };
+    return { inserted: false, messageCount: 0, newMessages: 0 };
   }
 
   const session = buildSession(filePath, threadStarted, items);
-  const { inserted } = insertSession(session);
-  if (!inserted) {
-    return { inserted: false, messageCount: 0 };
-  }
+  const { inserted } = upsertSession(session);
 
   const messages: Message[] = items.map((item, seq) => {
     let timestamp: number | null = null;
@@ -170,8 +167,8 @@ export function importFile(filePath: string): { inserted: boolean; messageCount:
     };
   });
 
-  insertBatch(messages);
-  return { inserted: true, messageCount: messages.length };
+  const { inserted: newMessages } = insertBatch(messages);
+  return { inserted, messageCount: messages.length, newMessages };
 }
 
 // ─── importAll ────────────────────────────────────────────────────────────────
@@ -207,9 +204,9 @@ export function importAll(
 
   for (const filePath of files) {
     const result = importFile(filePath);
-    if (result.inserted) {
+    if (result.inserted || result.newMessages > 0) {
       inserted++;
-      messages += result.messageCount;
+      messages += result.newMessages;
     } else {
       skipped++;
     }

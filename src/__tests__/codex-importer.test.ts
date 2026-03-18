@@ -208,7 +208,7 @@ describe('importFile', () => {
     assert.strictEqual(result.messageCount, 2);
   });
 
-  test('second call on same file is deduped', () => {
+  test('second call on same file upserts and reports 0 new messages', () => {
     const { importFile } = require('../importers/codex');
     const filePath = path.join(sessionsDir, `rollout-${crypto.randomBytes(4).toString('hex')}.jsonl`);
     writeJSONL(filePath, [
@@ -217,9 +217,11 @@ describe('importFile', () => {
     ]);
     const first = importFile(filePath);
     assert.strictEqual(first.inserted, true);
+    assert.strictEqual(first.messageCount, 1);
     const second = importFile(filePath);
     assert.strictEqual(second.inserted, false);
-    assert.strictEqual(second.messageCount, 0);
+    assert.strictEqual(second.messageCount, 1);
+    assert.strictEqual(second.newMessages, 0);
   });
 
   test('file with no turn items returns inserted:false', () => {

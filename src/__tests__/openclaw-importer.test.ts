@@ -280,7 +280,7 @@ describe('importFile', () => {
     assert.strictEqual(result.messageCount, 2);
   });
 
-  test('already-imported session returns inserted:false, messageCount:0', () => {
+  test('already-imported session upserts and reports 0 new messages', () => {
     const { importFile } = require('../importers/openclaw');
     const filePath = path.join(sessionsDir, `${crypto.randomUUID()}.jsonl`);
     writeJSONL(filePath, [
@@ -289,9 +289,11 @@ describe('importFile', () => {
     ]);
     const first = importFile(filePath);
     assert.strictEqual(first.inserted, true);
+    assert.strictEqual(first.messageCount, 1);
     const second = importFile(filePath);
     assert.strictEqual(second.inserted, false);
-    assert.strictEqual(second.messageCount, 0);
+    assert.strictEqual(second.messageCount, 1);
+    assert.strictEqual(second.newMessages, 0);
   });
 
   test('file with no session event returns inserted:false', () => {
