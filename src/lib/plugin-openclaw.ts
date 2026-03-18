@@ -66,7 +66,7 @@ export function installOpenClawPlugin(opts?: { whichFn?: (cmd: string) => string
   } catch {
     return {
       stdout: '',
-      stderr: 'Error: box0 binary not found in PATH. Please ensure box0 is installed (npm run build && npm link) and retry.',
+      stderr: 'Error: box0 binary not found in PATH. Please install box0 globally (npm install -g box0) and retry.',
       exitCode: 1,
     };
   }

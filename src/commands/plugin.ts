@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import chalk from 'chalk';
 import { installClaudeCodePlugin, uninstallClaudeCodePlugin, getClaudeCodePluginStatus } from '../lib/plugin-claude-code';
 import { installOpenClawPlugin, uninstallOpenClawPlugin, getOpenClawPluginStatus } from '../lib/plugin-openclaw';
 import { installCodexPlugin, uninstallCodexPlugin, getCodexPluginStatus } from '../lib/plugin-codex';
@@ -31,16 +32,16 @@ export function runPluginStatus(): { stdout: string; exitCode: number } {
   const cxStatus = getCodexPluginStatus();
 
   const ccLine = ccStatus.installed
-    ? `Claude Code hook: ✔ installed (Stop → ${ccStatus.hookPath})`
-    : `Claude Code hook: ✗ not installed (run: box0 plugin install claude-code)`;
+    ? `${chalk.dim('Claude Code hook:')} ${chalk.green('✔ installed')} ${chalk.dim('(Stop → ' + ccStatus.hookPath + ')')}`
+    : `${chalk.dim('Claude Code hook:')} ${chalk.red('✗ not installed')} ${chalk.dim('(run: box0 plugin install claude-code)')}`;
 
   const ocLine = ocStatus.installed
-    ? `OpenClaw plugin: ✔ installed (${ocStatus.extensionDir}/)`
-    : `OpenClaw plugin: ✗ not installed (run: box0 plugin install openclaw)`;
+    ? `${chalk.dim('OpenClaw plugin:')}  ${chalk.green('✔ installed')} ${chalk.dim('(' + ocStatus.extensionDir + '/)')}`
+    : `${chalk.dim('OpenClaw plugin:')}  ${chalk.red('✗ not installed')} ${chalk.dim('(run: box0 plugin install openclaw)')}`;
 
   const cxLine = cxStatus.installed
-    ? `Codex notify:    ✔ installed (notify → ${cxStatus.configPath})`
-    : `Codex notify:    ✗ not installed (run: box0 plugin install codex)`;
+    ? `${chalk.dim('Codex notify:')}     ${chalk.green('✔ installed')} ${chalk.dim('(notify → ' + cxStatus.configPath + ')')}`
+    : `${chalk.dim('Codex notify:')}     ${chalk.red('✗ not installed')} ${chalk.dim('(run: box0 plugin install codex)')}`;
 
   return { stdout: `${ccLine}\n${ocLine}\n${cxLine}\n`, exitCode: 0 };
 }

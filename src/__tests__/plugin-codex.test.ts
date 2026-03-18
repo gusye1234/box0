@@ -5,6 +5,10 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
 
+function stripAnsi(s: string): string {
+  return s.replace(/\x1B\[[0-9;]*m/g, '');
+}
+
 function makeTempDir(): string {
   const dir = path.join(os.tmpdir(), `box0-codex-plugin-test-${crypto.randomBytes(4).toString('hex')}`);
   fs.mkdirSync(dir, { recursive: true });
@@ -277,6 +281,6 @@ describe('plugin command routing (codex)', () => {
   test('runPluginStatus() includes Codex status line', () => {
     const { runPluginStatus } = require('../commands/plugin');
     const result = runPluginStatus();
-    assert.ok(result.stdout.includes('Codex notify:'), `stdout should include Codex line: ${result.stdout}`);
+    assert.ok(stripAnsi(result.stdout).includes('Codex notify:'), `stdout should include Codex line: ${result.stdout}`);
   });
 });

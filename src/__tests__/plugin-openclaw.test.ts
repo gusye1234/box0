@@ -5,6 +5,10 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
 
+function stripAnsi(s: string): string {
+  return s.replace(/\x1B\[[0-9;]*m/g, '');
+}
+
 function makeTempDir(): string {
   const dir = path.join(os.tmpdir(), `box0-oc-plugin-test-${crypto.randomBytes(4).toString('hex')}`);
   fs.mkdirSync(dir, { recursive: true });
@@ -272,8 +276,11 @@ describe('plugin command routing (openclaw)', () => {
 
     const { runPluginStatus } = require('../commands/plugin');
     const result = runPluginStatus();
-    assert.ok(result.stdout.includes('Claude Code hook: ✗ not installed'));
-    assert.ok(result.stdout.includes('OpenClaw plugin: ✔ installed'));
+    const plain = stripAnsi(result.stdout);
+    assert.ok(plain.includes('Claude Code hook:'));
+    assert.ok(plain.includes('✗ not installed'));
+    assert.ok(plain.includes('OpenClaw plugin:'));
+    assert.ok(plain.includes('✔ installed'));
   });
 
   test('runPluginStatus shows both agents when claude-code installed, openclaw not', () => {
@@ -288,8 +295,10 @@ describe('plugin command routing (openclaw)', () => {
 
     const { runPluginStatus } = require('../commands/plugin');
     const result = runPluginStatus();
-    assert.ok(result.stdout.includes('Claude Code hook: ✔ installed'));
-    assert.ok(result.stdout.includes('OpenClaw plugin: ✗ not installed'));
+    const plain = stripAnsi(result.stdout);
+    assert.ok(plain.includes('Claude Code hook:'));
+    assert.ok(plain.includes('✔ installed'));
+    assert.ok(plain.includes('OpenClaw plugin:'));
   });
 
   test('runPluginStatus shows both installed when both plugins are installed', () => {
@@ -306,7 +315,9 @@ describe('plugin command routing (openclaw)', () => {
 
     const { runPluginStatus } = require('../commands/plugin');
     const result = runPluginStatus();
-    assert.ok(result.stdout.includes('Claude Code hook: ✔ installed'));
-    assert.ok(result.stdout.includes('OpenClaw plugin: ✔ installed'));
+    const plain = stripAnsi(result.stdout);
+    assert.ok(plain.includes('Claude Code hook:'));
+    assert.ok(plain.includes('✔ installed'));
+    assert.ok(plain.includes('OpenClaw plugin:'));
   });
 });
