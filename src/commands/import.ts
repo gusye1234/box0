@@ -8,14 +8,21 @@ import { defaultBasePath as openclawDefaultBasePath, importAll as openclawImport
 import { defaultFilePath as chatgptDefaultFilePath, importFile as chatgptImportFile } from '../importers/chatgpt';
 import { defaultBasePath as codexDefaultBasePath, importAll as codexImportAll } from '../importers/codex';
 
-export function runImportFile(agent: AgentSource, filePath: string): { stdout: string; stderr: string; exitCode: number } {
+export function runImportFile(
+  agent: AgentSource,
+  filePath: string,
+  opts?: { force?: boolean }
+): { stdout: string; stderr: string; exitCode: number } {
   const absPath = path.resolve(filePath);
   try {
-    let result: { inserted: boolean; messageCount: number; newMessages: number };
+    let result: { inserted: boolean; messageCount: number; newMessages: number; unchanged?: boolean };
     if (agent === 'claude-code') {
-      result = claudeImportFile(absPath);
+      result = claudeImportFile(absPath, opts);
     } else {
       return { stdout: '', stderr: `Unsupported agent for --file import: ${agent}`, exitCode: 1 };
+    }
+    if (result.unchanged) {
+      return { stdout: `File unchanged (cached).\n`, stderr: '', exitCode: 0 };
     }
     if (result.inserted) {
       return { stdout: `Imported 1 session, ${result.messageCount} messages.\n`, stderr: '', exitCode: 0 };
@@ -47,7 +54,10 @@ export const importCommand = new Command('import')
   .option('--path <dir>', 'Override the default source directory')
   .option('--file <path>', 'Import a single file (claude-code only)')
   .option('--stdin', 'Read JSON from stdin (openclaw plugin sync only)')
-  .action(async (source: string, options: { path?: string; file?: string; stdin?: boolean }) => {
+  .option('--force', 'Bypass file cache and re-import all files')
+  .action(async (source: string, options: { path?: string; file?: string; stdin?: boolean; force?: boolean }) => {
+    const forceOpts = { force: !!options.force };
+
     if (options.stdin) {
       if (source !== 'openclaw') {
         process.stderr.write("--stdin is only supported for 'openclaw' source\n");
@@ -79,7 +89,7 @@ export const importCommand = new Command('import')
       return;
     }
     if (options.file) {
-      const result = runImportFile(source as AgentSource, options.file);
+      const result = runImportFile(source as AgentSource, options.file, forceOpts);
       if (result.stdout) process.stdout.write(result.stdout);
       if (result.stderr) process.stderr.write(result.stderr + '\n');
       if (result.exitCode !== 0) process.exit(result.exitCode);
@@ -95,13 +105,15 @@ export const importCommand = new Command('import')
 
         let result: ReturnType<typeof claudeImportAll>;
         try {
-          result = claudeImportAll(basePath, ({ projName, files, inserted, skipped }) => {
+          result = claudeImportAll(basePath, ({ projName, files, inserted, skipped, unchanged }) => {
             spinner.clear();
+            const parts = [chalk.green(inserted + ' inserted'), chalk.yellow(skipped + ' skipped')];
+            if (unchanged > 0) parts.push(chalk.dim(unchanged + ' unchanged'));
             process.stdout.write(
-              `  ${chalk.green('✔')} ${projName}  (${files} files)  →  ${chalk.green(inserted + ' inserted')}, ${chalk.yellow(skipped + ' skipped')}\n`
+              `  ${chalk.green('✔')} ${projName}  (${files} files)  →  ${parts.join(', ')}\n`
             );
             spinner.render();
-          });
+          }, forceOpts);
         } catch (err) {
           spinner.fail(`Failed to import: ${(err as Error).message}`);
           process.exit(1);
@@ -119,10 +131,14 @@ export const importCommand = new Command('import')
 
         let result: ReturnType<typeof openclawImportAll>;
         try {
-          result = openclawImportAll(basePath, (filePath, { inserted, messageCount }) => {
+          result = openclawImportAll(basePath, (filePath, { inserted, messageCount, unchanged }) => {
             spinner.clear();
             const fileName = filePath.split('/').pop() ?? filePath;
-            if (inserted) {
+            if (unchanged) {
+              process.stdout.write(
+                `  ${chalk.dim('–')} ${fileName}  →  ${chalk.dim('unchanged (cached)')}\n`
+              );
+            } else if (inserted) {
               process.stdout.write(
                 `  ${chalk.green('✔')} ${fileName}  →  ${chalk.green(messageCount + ' messages')} (inserted)\n`
               );
@@ -132,7 +148,7 @@ export const importCommand = new Command('import')
               );
             }
             spinner.render();
-          });
+          }, forceOpts);
         } catch (err) {
           spinner.fail(`Failed to import: ${(err as Error).message}`);
           process.exit(1);
@@ -171,7 +187,7 @@ export const importCommand = new Command('import')
               );
             }
             spinner.render();
-          });
+          }, forceOpts);
         } catch (err) {
           spinner.fail(`Failed to import: ${(err as Error).message}`);
           process.exit(1);
@@ -179,9 +195,13 @@ export const importCommand = new Command('import')
         }
 
         const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-        spinner.succeed(
-          `Done. ${result.inserted} sessions inserted, ${result.skipped} skipped  |  Total messages: ${result.messages}  |  Time: ${elapsed}s`
-        );
+        if (result.unchanged) {
+          spinner.succeed(`File unchanged (cached). Time: ${elapsed}s`);
+        } else {
+          spinner.succeed(
+            `Done. ${result.inserted} sessions inserted, ${result.skipped} skipped  |  Total messages: ${result.messages}  |  Time: ${elapsed}s`
+          );
+        }
         break;
       }
 
@@ -191,10 +211,14 @@ export const importCommand = new Command('import')
 
         let result: ReturnType<typeof codexImportAll>;
         try {
-          result = codexImportAll(basePath, (filePath, { inserted, messageCount }) => {
+          result = codexImportAll(basePath, (filePath, { inserted, messageCount, unchanged }) => {
             spinner.clear();
             const fileName = filePath.split('/').pop() ?? filePath;
-            if (inserted) {
+            if (unchanged) {
+              process.stdout.write(
+                `  ${chalk.dim('–')} ${fileName}  →  ${chalk.dim('unchanged (cached)')}\n`
+              );
+            } else if (inserted) {
               process.stdout.write(
                 `  ${chalk.green('✔')} ${fileName}  →  ${chalk.green(messageCount + ' messages')} (inserted)\n`
               );
@@ -204,7 +228,7 @@ export const importCommand = new Command('import')
               );
             }
             spinner.render();
-          });
+          }, forceOpts);
         } catch (err) {
           spinner.fail(`Failed to import: ${(err as Error).message}`);
           process.exit(1);

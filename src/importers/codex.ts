@@ -5,6 +5,7 @@ import * as path from 'path';
 import { Session, Message } from '../types';
 import { upsertSession } from '../models/session';
 import { insertBatch } from '../models/message';
+import { checkFileCache, recordFileImported } from '../lib/file-cache';
 
 // ─── Local interfaces ─────────────────────────────────────────────────────────
 
@@ -139,14 +140,23 @@ export function buildSession(
 
 // ─── importFile ───────────────────────────────────────────────────────────────
 
-export function importFile(filePath: string): { inserted: boolean; messageCount: number; newMessages: number } {
-  const { threadStarted, items } = parseJSONLFile(filePath);
+export function importFile(
+  filePath: string,
+  opts?: { force?: boolean }
+): { inserted: boolean; messageCount: number; newMessages: number; unchanged?: boolean } {
+  const cache = checkFileCache(filePath, opts?.force);
+  if (cache.unchanged) {
+    return { inserted: false, messageCount: 0, newMessages: 0, unchanged: true };
+  }
+
+  const { threadStarted, items } = parseJSONLFile(cache.resolved);
 
   if (items.length === 0) {
+    recordFileImported(cache.resolved, cache.mtimeMs, cache.sizeBytes);
     return { inserted: false, messageCount: 0, newMessages: 0 };
   }
 
-  const session = buildSession(filePath, threadStarted, items);
+  const session = buildSession(cache.resolved, threadStarted, items);
   const { inserted } = upsertSession(session);
 
   const messages: Message[] = items.map((item, seq) => {
@@ -168,6 +178,7 @@ export function importFile(filePath: string): { inserted: boolean; messageCount:
   });
 
   const { inserted: newMessages } = insertBatch(messages);
+  recordFileImported(cache.resolved, cache.mtimeMs, cache.sizeBytes);
   return { inserted, messageCount: messages.length, newMessages };
 }
 
@@ -193,18 +204,28 @@ function collectRolloutFiles(dir: string, results: string[]): void {
 
 export function importAll(
   basePath: string,
-  onFile?: (filePath: string, result: { inserted: boolean; messageCount: number }) => void
-): { inserted: number; skipped: number; messages: number } {
+  onFile?: (filePath: string, result: { inserted: boolean; messageCount: number; unchanged?: boolean }) => void,
+  opts?: { force?: boolean }
+): { inserted: number; skipped: number; messages: number; unchanged: number } {
   const files: string[] = [];
   collectRolloutFiles(basePath, files);
 
   let inserted = 0;
   let skipped = 0;
   let messages = 0;
+  let unchanged = 0;
 
   for (const filePath of files) {
-    const result = importFile(filePath);
-    if (result.inserted || result.newMessages > 0) {
+    let result: ReturnType<typeof importFile>;
+    try {
+      result = importFile(filePath, opts);
+    } catch {
+      continue;
+    }
+
+    if (result.unchanged) {
+      unchanged++;
+    } else if (result.inserted || result.newMessages > 0) {
       inserted++;
       messages += result.newMessages;
     } else {
@@ -213,5 +234,5 @@ export function importAll(
     onFile?.(filePath, result);
   }
 
-  return { inserted, skipped, messages };
+  return { inserted, skipped, messages, unchanged };
 }

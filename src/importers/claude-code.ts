@@ -5,6 +5,7 @@ import * as path from 'path';
 import { Session, Message, ImportStats } from '../types';
 import { upsertSession } from '../models/session';
 import { insertBatch } from '../models/message';
+import { checkFileCache, recordFileImported } from '../lib/file-cache';
 
 interface ContentBlock {
   type: string;
@@ -90,13 +91,22 @@ export function buildSession(filePath: string, entries: RawEntry[]): Session {
   };
 }
 
-export function importFile(filePath: string): { inserted: boolean; messageCount: number; newMessages: number } {
-  const entries = parseJSONLFile(filePath);
+export function importFile(
+  filePath: string,
+  opts?: { force?: boolean }
+): { inserted: boolean; messageCount: number; newMessages: number; unchanged?: boolean } {
+  const cache = checkFileCache(filePath, opts?.force);
+  if (cache.unchanged) {
+    return { inserted: false, messageCount: 0, newMessages: 0, unchanged: true };
+  }
+
+  const entries = parseJSONLFile(cache.resolved);
   if (entries.length === 0) {
+    recordFileImported(cache.resolved, cache.mtimeMs, cache.sizeBytes);
     return { inserted: false, messageCount: 0, newMessages: 0 };
   }
 
-  const session = buildSession(filePath, entries);
+  const session = buildSession(cache.resolved, entries);
   const { inserted } = upsertSession(session);
 
   const messages: Message[] = entries.map((entry, seq) => ({
@@ -109,6 +119,7 @@ export function importFile(filePath: string): { inserted: boolean; messageCount:
   }));
 
   const { inserted: newMessages } = insertBatch(messages);
+  recordFileImported(cache.resolved, cache.mtimeMs, cache.sizeBytes);
   return { inserted, messageCount: messages.length, newMessages };
 }
 
@@ -117,6 +128,7 @@ export interface ProjectProgress {
   files: number;
   inserted: number;
   skipped: number;
+  unchanged: number;
 }
 
 export interface ImportAllResult extends ImportStats {
@@ -126,18 +138,20 @@ export interface ImportAllResult extends ImportStats {
 
 export function importAll(
   basePath: string,
-  onProject?: (p: ProjectProgress) => void
+  onProject?: (p: ProjectProgress) => void,
+  opts?: { force?: boolean }
 ): ImportAllResult {
   let sessions = 0;
   let messages = 0;
   let inserted = 0;
   let skipped = 0;
+  let unchanged = 0;
 
   let projectDirs: string[];
   try {
     projectDirs = fs.readdirSync(basePath);
   } catch {
-    return { sessions, messages, inserted, skipped };
+    return { sessions, messages, inserted, skipped, unchanged };
   }
 
   for (const projName of projectDirs) {
@@ -160,22 +174,26 @@ export function importAll(
     let projFiles = 0;
     let projInserted = 0;
     let projSkipped = 0;
+    let projUnchanged = 0;
 
     for (const fileName of files) {
       if (!fileName.endsWith('.jsonl')) continue;
       const filePath = path.join(projPath, fileName);
-      let fileStat: fs.Stats;
+
+      let result: ReturnType<typeof importFile>;
       try {
-        fileStat = fs.statSync(filePath);
+        result = importFile(filePath, opts);
       } catch {
         continue;
       }
-      if (!fileStat.isFile()) continue;
 
       projFiles++;
       sessions++;
-      const result = importFile(filePath);
-      if (result.inserted || result.newMessages > 0) {
+
+      if (result.unchanged) {
+        projUnchanged++;
+        unchanged++;
+      } else if (result.inserted || result.newMessages > 0) {
         projInserted++;
         inserted++;
         messages += result.newMessages;
@@ -186,9 +204,9 @@ export function importAll(
     }
 
     if (projFiles > 0) {
-      onProject?.({ projName, files: projFiles, inserted: projInserted, skipped: projSkipped });
+      onProject?.({ projName, files: projFiles, inserted: projInserted, skipped: projSkipped, unchanged: projUnchanged });
     }
   }
 
-  return { sessions, messages, inserted, skipped };
+  return { sessions, messages, inserted, skipped, unchanged };
 }

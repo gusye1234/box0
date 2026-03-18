@@ -208,7 +208,7 @@ describe('importFile', () => {
     assert.strictEqual(result.messageCount, 2);
   });
 
-  test('second call on same file upserts and reports 0 new messages', () => {
+  test('second call on same file returns unchanged (file cache hit)', () => {
     const { importFile } = require('../importers/codex');
     const filePath = path.join(sessionsDir, `rollout-${crypto.randomBytes(4).toString('hex')}.jsonl`);
     writeJSONL(filePath, [
@@ -219,9 +219,24 @@ describe('importFile', () => {
     assert.strictEqual(first.inserted, true);
     assert.strictEqual(first.messageCount, 1);
     const second = importFile(filePath);
+    assert.strictEqual(second.unchanged, true);
+  });
+
+  test('importFile with force:true on second call upserts and reports 0 new messages', () => {
+    const { importFile } = require('../importers/codex');
+    const filePath = path.join(sessionsDir, `rollout-${crypto.randomBytes(4).toString('hex')}.jsonl`);
+    writeJSONL(filePath, [
+      makeThreadStarted(),
+      makeTurnItem('user', 'force test'),
+    ]);
+    const first = importFile(filePath);
+    assert.strictEqual(first.inserted, true);
+    assert.strictEqual(first.messageCount, 1);
+    const second = importFile(filePath, { force: true });
     assert.strictEqual(second.inserted, false);
     assert.strictEqual(second.messageCount, 1);
     assert.strictEqual(second.newMessages, 0);
+    assert.ok(!second.unchanged);
   });
 
   test('file with no turn items returns inserted:false', () => {
@@ -342,6 +357,29 @@ describe('importAll', () => {
     const result = defaultBasePath();
     assert.strictEqual(result, '/custom/codex/sessions');
     delete process.env.CODEX_DIR;
+  });
+
+  test('onFile callback for cached file receives unchanged: true', () => {
+    const { importAll } = require('../importers/codex');
+    const dateDir = path.join(baseDir, '2026', '03', '01');
+    fs.mkdirSync(dateDir, { recursive: true });
+
+    writeJSONL(path.join(dateDir, 'rollout-cached.jsonl'), [
+      makeThreadStarted(),
+      makeTurnItem('user', 'cached test'),
+    ]);
+
+    // First import
+    importAll(baseDir);
+
+    // Second import — should be cached
+    const callbacks: Array<{ filePath: string; result: { inserted: boolean; messageCount: number; unchanged?: boolean } }> = [];
+    importAll(baseDir, (filePath: string, result: { inserted: boolean; messageCount: number; unchanged?: boolean }) => {
+      callbacks.push({ filePath, result });
+    });
+
+    assert.strictEqual(callbacks.length, 1);
+    assert.strictEqual(callbacks[0].result.unchanged, true);
   });
 
   test('defaultBasePath returns ~/.codex/sessions by default', () => {

@@ -280,7 +280,7 @@ describe('importFile', () => {
     assert.strictEqual(result.messageCount, 2);
   });
 
-  test('already-imported session upserts and reports 0 new messages', () => {
+  test('already-imported session returns unchanged (file cache hit)', () => {
     const { importFile } = require('../importers/openclaw');
     const filePath = path.join(sessionsDir, `${crypto.randomUUID()}.jsonl`);
     writeJSONL(filePath, [
@@ -291,9 +291,24 @@ describe('importFile', () => {
     assert.strictEqual(first.inserted, true);
     assert.strictEqual(first.messageCount, 1);
     const second = importFile(filePath);
+    assert.strictEqual(second.unchanged, true);
+  });
+
+  test('importFile with force:true on second call upserts and reports 0 new messages', () => {
+    const { importFile } = require('../importers/openclaw');
+    const filePath = path.join(sessionsDir, `${crypto.randomUUID()}.jsonl`);
+    writeJSONL(filePath, [
+      makeSessionEvent(),
+      makeMessageEvent('user', [{ type: 'text', text: 'force test' }]),
+    ]);
+    const first = importFile(filePath);
+    assert.strictEqual(first.inserted, true);
+    assert.strictEqual(first.messageCount, 1);
+    const second = importFile(filePath, { force: true });
     assert.strictEqual(second.inserted, false);
     assert.strictEqual(second.messageCount, 1);
     assert.strictEqual(second.newMessages, 0);
+    assert.ok(!second.unchanged);
   });
 
   test('file with no session event returns inserted:false', () => {
@@ -423,6 +438,28 @@ describe('importAll', () => {
     const result = defaultBasePath();
     assert.ok(result.endsWith(path.join('.openclaw', 'agents', 'main', 'sessions')));
     if (origEnv !== undefined) process.env.OPENCLAW_DIR = origEnv;
+  });
+
+  test('onFile callback for cached file receives unchanged: true', () => {
+    const { importAll } = require('../importers/openclaw');
+
+    const uuid = crypto.randomUUID();
+    writeJSONL(path.join(sessionsDir, `${uuid}.jsonl`), [
+      makeSessionEvent(),
+      makeMessageEvent('user', [{ type: 'text', text: 'cached test' }]),
+    ]);
+
+    // First import
+    importAll(sessionsDir);
+
+    // Second import — should be cached
+    const callbacks: Array<{ filePath: string; result: { inserted: boolean; messageCount: number; unchanged?: boolean } }> = [];
+    importAll(sessionsDir, (filePath: string, result: { inserted: boolean; messageCount: number; unchanged?: boolean }) => {
+      callbacks.push({ filePath, result });
+    });
+
+    assert.strictEqual(callbacks.length, 1);
+    assert.strictEqual(callbacks[0].result.unchanged, true);
   });
 
   test('defaultBasePath with OPENCLAW_DIR env returns $OPENCLAW_DIR/agents/main/sessions', () => {

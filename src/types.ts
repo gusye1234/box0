@@ -30,4 +30,5 @@ export interface SearchResult {
 export interface ImportStats {
   inserted: number;
   skipped: number;
+  unchanged: number;
 }

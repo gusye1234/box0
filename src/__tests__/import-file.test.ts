@@ -69,7 +69,7 @@ describe('runImportFile', () => {
     assert.strictEqual(result.stdout, '');
   });
 
-  test('duplicate import is idempotent (second call returns up to date)', () => {
+  test('duplicate import is idempotent (second call returns file unchanged)', () => {
     const { runImportFile } = require('../commands/import');
     const fixturePath = path.join(fixtureDir, `dedup-${crypto.randomBytes(4).toString('hex')}.jsonl`);
     writeJSONL(fixturePath, [
@@ -80,6 +80,21 @@ describe('runImportFile', () => {
     assert.match(first.stdout, /^Imported 1 session/);
 
     const second = runImportFile('claude-code', fixturePath);
+    assert.strictEqual(second.exitCode, 0);
+    assert.match(second.stdout, /^File unchanged \(cached\)/);
+  });
+
+  test('duplicate import with --force bypasses cache and returns session up to date', () => {
+    const { runImportFile } = require('../commands/import');
+    const fixturePath = path.join(fixtureDir, `force-${crypto.randomBytes(4).toString('hex')}.jsonl`);
+    writeJSONL(fixturePath, [
+      makeEntry('user', 'force test', '2024-01-01T00:00:00.000Z'),
+    ]);
+    const first = runImportFile('claude-code', fixturePath);
+    assert.strictEqual(first.exitCode, 0);
+    assert.match(first.stdout, /^Imported 1 session/);
+
+    const second = runImportFile('claude-code', fixturePath, { force: true });
     assert.strictEqual(second.exitCode, 0);
     assert.match(second.stdout, /^Session up to date/);
   });

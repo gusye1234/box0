@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import { Session, Message } from '../types';
 import { insertSession } from '../models/session';
 import { insertBatch } from '../models/message';
+import { checkFileCache, recordFileImported } from '../lib/file-cache';
 
 // ─── Local interfaces ─────────────────────────────────────────────────────────
 
@@ -175,9 +176,15 @@ export function importConversation(conv: ChatGPTConversation): { inserted: boole
 
 export function importFile(
   filePath: string,
-  onConversation?: (conv: ChatGPTConversation, result: { inserted: boolean; messageCount: number }) => void
-): { inserted: number; skipped: number; messages: number } {
-  const conversations = parseFile(filePath);
+  onConversation?: (conv: ChatGPTConversation, result: { inserted: boolean; messageCount: number }) => void,
+  opts?: { force?: boolean }
+): { inserted: number; skipped: number; messages: number; unchanged?: boolean } {
+  const cache = checkFileCache(filePath, opts?.force);
+  if (cache.unchanged) {
+    return { inserted: 0, skipped: 0, messages: 0, unchanged: true };
+  }
+
+  const conversations = parseFile(cache.resolved);
   let inserted = 0;
   let skipped = 0;
   let messages = 0;
@@ -193,5 +200,6 @@ export function importFile(
     onConversation?.(conv, result);
   }
 
+  recordFileImported(cache.resolved, cache.mtimeMs, cache.sizeBytes);
   return { inserted, skipped, messages };
 }

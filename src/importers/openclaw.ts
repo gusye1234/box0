@@ -5,6 +5,7 @@ import * as path from 'path';
 import { Session, Message } from '../types';
 import { upsertSession } from '../models/session';
 import { insertBatch } from '../models/message';
+import { checkFileCache, recordFileImported } from '../lib/file-cache';
 
 // ─── Local interfaces ────────────────────────────────────────────────────────
 
@@ -140,14 +141,23 @@ export function buildSession(
 
 // ─── importFile ───────────────────────────────────────────────────────────────
 
-export function importFile(filePath: string): { inserted: boolean; messageCount: number; newMessages: number } {
-  const { sessionEvent, messageEvents } = parseJSONLFile(filePath);
+export function importFile(
+  filePath: string,
+  opts?: { force?: boolean }
+): { inserted: boolean; messageCount: number; newMessages: number; unchanged?: boolean } {
+  const cache = checkFileCache(filePath, opts?.force);
+  if (cache.unchanged) {
+    return { inserted: false, messageCount: 0, newMessages: 0, unchanged: true };
+  }
+
+  const { sessionEvent, messageEvents } = parseJSONLFile(cache.resolved);
 
   if (sessionEvent === null || messageEvents.length === 0) {
+    recordFileImported(cache.resolved, cache.mtimeMs, cache.sizeBytes);
     return { inserted: false, messageCount: 0, newMessages: 0 };
   }
 
-  const session = buildSession(filePath, sessionEvent, messageEvents);
+  const session = buildSession(cache.resolved, sessionEvent, messageEvents);
   const { inserted } = upsertSession(session);
 
   const messages: Message[] = messageEvents.map((ev, seq) => ({
@@ -160,6 +170,7 @@ export function importFile(filePath: string): { inserted: boolean; messageCount:
   }));
 
   const { inserted: newMessages } = insertBatch(messages);
+  recordFileImported(cache.resolved, cache.mtimeMs, cache.sizeBytes);
   return { inserted, messageCount: messages.length, newMessages };
 }
 
@@ -251,28 +262,37 @@ export function runImportFromPlugin(opts: PluginImportOpts): { stdout: string; s
 
 export function importAll(
   basePath: string,
-  onFile?: (filePath: string, result: { inserted: boolean; messageCount: number }) => void
-): { inserted: number; skipped: number; messages: number } {
+  onFile?: (filePath: string, result: { inserted: boolean; messageCount: number; unchanged?: boolean }) => void,
+  opts?: { force?: boolean }
+): { inserted: number; skipped: number; messages: number; unchanged: number } {
   let inserted = 0;
   let skipped = 0;
   let messages = 0;
+  let unchanged = 0;
 
   let entries: string[];
   try {
     entries = fs.readdirSync(basePath);
   } catch {
-    return { inserted: 0, skipped: 0, messages: 0 };
+    return { inserted: 0, skipped: 0, messages: 0, unchanged: 0 };
   }
 
   for (const name of entries) {
-    // Must end with .jsonl and must NOT contain .deleted. in the name
     if (!name.endsWith('.jsonl')) continue;
     if (name.includes('.deleted.')) continue;
 
     const filePath = path.join(basePath, name);
-    const result = importFile(filePath);
 
-    if (result.inserted || result.newMessages > 0) {
+    let result: ReturnType<typeof importFile>;
+    try {
+      result = importFile(filePath, opts);
+    } catch {
+      continue;
+    }
+
+    if (result.unchanged) {
+      unchanged++;
+    } else if (result.inserted || result.newMessages > 0) {
       inserted++;
       messages += result.newMessages;
     } else {
@@ -282,5 +302,5 @@ export function importAll(
     onFile?.(filePath, result);
   }
 
-  return { inserted, skipped, messages };
+  return { inserted, skipped, messages, unchanged };
 }

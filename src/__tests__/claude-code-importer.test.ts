@@ -192,7 +192,7 @@ describe('importFile', () => {
     assert.strictEqual(result.messageCount, 2);
   });
 
-  test('importFile on second call upserts session and reports 0 new messages', () => {
+  test('importFile on second call returns unchanged (file cache hit)', () => {
     const { importFile } = require('../importers/claude-code');
     const filePath = path.join(claudeDir, 'dedup.jsonl');
     writeJSONL(filePath, [
@@ -202,9 +202,89 @@ describe('importFile', () => {
     assert.strictEqual(first.inserted, true);
     assert.strictEqual(first.messageCount, 1);
     const second = importFile(filePath);
+    assert.strictEqual(second.unchanged, true);
+  });
+
+  test('importFile with force:true on second call upserts and reports 0 new messages', () => {
+    const { importFile } = require('../importers/claude-code');
+    const filePath = path.join(claudeDir, 'force-dedup.jsonl');
+    writeJSONL(filePath, [
+      makeEntry('user', 'force test', '2024-01-01T00:00:00.000Z'),
+    ]);
+    const first = importFile(filePath);
+    assert.strictEqual(first.inserted, true);
+    assert.strictEqual(first.messageCount, 1);
+    const second = importFile(filePath, { force: true });
     assert.strictEqual(second.inserted, false);
     assert.strictEqual(second.messageCount, 1);
     assert.strictEqual(second.newMessages, 0);
+    assert.ok(!second.unchanged);
+  });
+
+  test('importFile: changed mtime triggers full re-import', () => {
+    const { importFile } = require('../importers/claude-code');
+    const filePath = path.join(claudeDir, 'mtime-change.jsonl');
+    writeJSONL(filePath, [
+      makeEntry('user', 'mtime test', '2024-01-01T00:00:00.000Z'),
+    ]);
+    const first = importFile(filePath);
+    assert.strictEqual(first.inserted, true);
+
+    // Touch the file to change mtime (rewrite same content)
+    const content = fs.readFileSync(filePath, 'utf8');
+    const futureTime = Date.now() + 10000;
+    fs.utimesSync(filePath, futureTime / 1000, futureTime / 1000);
+
+    const second = importFile(filePath);
+    assert.ok(!second.unchanged, 'Should re-import after mtime change');
+    assert.strictEqual(second.inserted, false);
+    assert.strictEqual(second.newMessages, 0);
+  });
+
+  test('importFile: changed size triggers full re-import', () => {
+    const { importFile } = require('../importers/claude-code');
+    const filePath = path.join(claudeDir, 'size-change.jsonl');
+    writeJSONL(filePath, [
+      makeEntry('user', 'size test', '2024-01-01T00:00:00.000Z'),
+    ]);
+    const first = importFile(filePath);
+    assert.strictEqual(first.inserted, true);
+
+    // Append content to change size
+    fs.appendFileSync(filePath, JSON.stringify(makeEntry('assistant', 'reply', '2024-01-01T00:01:00.000Z')) + '\n');
+    const second = importFile(filePath);
+    assert.ok(!second.unchanged, 'Should re-import after size change');
+    assert.strictEqual(second.newMessages, 1);
+  });
+
+  test('importFile: file_meta is updated after successful import', () => {
+    const { importFile } = require('../importers/claude-code');
+    const { getFileMeta } = require('../models/file-meta');
+    const filePath = path.join(claudeDir, 'meta-update.jsonl');
+    writeJSONL(filePath, [
+      makeEntry('user', 'meta test', '2024-01-01T00:00:00.000Z'),
+    ]);
+    importFile(filePath);
+    const absPath = path.resolve(filePath);
+    const meta = getFileMeta(absPath);
+    assert.ok(meta !== undefined, 'file_meta should be set after import');
+    const stat = fs.statSync(absPath);
+    assert.strictEqual(meta!.mtime_ms, Math.floor(stat.mtimeMs));
+    assert.strictEqual(meta!.size_bytes, stat.size);
+  });
+
+  test('importFile: empty file (0 entries) is cached after import; second run skips', () => {
+    const { importFile } = require('../importers/claude-code');
+    const filePath = path.join(claudeDir, 'empty-cached.jsonl');
+    writeJSONL(filePath, [
+      { type: 'queue-operation', uuid: 'x', message: { role: 'user', content: 'skip' } },
+    ]);
+    const first = importFile(filePath);
+    assert.strictEqual(first.messageCount, 0);
+    assert.ok(!first.unchanged);
+
+    const second = importFile(filePath);
+    assert.strictEqual(second.unchanged, true);
   });
 
   test('importFile handles JSONL with zero user/assistant entries', () => {
@@ -326,6 +406,22 @@ describe('importAll', () => {
     assert.strictEqual(result.sessions, 1);   // only abc123.jsonl
     assert.strictEqual(result.inserted, 1);
     assert.strictEqual(result.messages, 1);
+  });
+
+  test('file deleted between readdir and processing (bulk import) is skipped without crash', () => {
+    const { importAll } = require('../importers/claude-code');
+
+    const proj = path.join(claudeDir, '-home-user--proj-deleted');
+    fs.mkdirSync(proj);
+    writeJSONL(path.join(proj, 'kept.jsonl'), [makeEntry('user', 'kept')]);
+    const ephemeralPath = path.join(proj, 'ephemeral.jsonl');
+    writeJSONL(ephemeralPath, [makeEntry('user', 'vanishing')]);
+
+    // Delete the file right after creation to simulate race condition
+    fs.unlinkSync(ephemeralPath);
+
+    const result = importAll(claudeDir);
+    assert.strictEqual(result.inserted, 1);
   });
 
   test('defaultBasePath returns CLAUDE_DIR env when set', () => {

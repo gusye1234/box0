@@ -394,4 +394,53 @@ describe('importFile', () => {
     assert.strictEqual(defaultFilePath(), '');
     if (origEnv !== undefined) process.env.CHATGPT_EXPORT_FILE = origEnv;
   });
+
+  test('second importFile call on same file returns unchanged (file cache hit)', () => {
+    const { importFile } = require('../importers/chatgpt');
+    const filePath = path.join(tmpDir, 'cache-test.json');
+    const n1 = makeNode('n1', null, 'user', 'cache test');
+    const conv = makeConversation(crypto.randomUUID(), [n1], 'n1');
+    fs.writeFileSync(filePath, JSON.stringify([conv]), 'utf8');
+
+    const first = importFile(filePath);
+    assert.strictEqual(first.inserted, 1);
+
+    const second = importFile(filePath);
+    assert.strictEqual(second.unchanged, true);
+    assert.strictEqual(second.inserted, 0);
+    assert.strictEqual(second.messages, 0);
+  });
+
+  test('cached file produces unchanged summary without calling onConversation', () => {
+    const { importFile } = require('../importers/chatgpt');
+    const filePath = path.join(tmpDir, 'no-callback.json');
+    const n1 = makeNode('n1', null, 'user', 'no callback test');
+    const conv = makeConversation(crypto.randomUUID(), [n1], 'n1');
+    fs.writeFileSync(filePath, JSON.stringify([conv]), 'utf8');
+
+    importFile(filePath);
+
+    const callbacks: unknown[] = [];
+    const second = importFile(filePath, (conv: unknown) => { callbacks.push(conv); });
+    assert.strictEqual(second.unchanged, true);
+    assert.strictEqual(callbacks.length, 0, 'onConversation should not be called for cached file');
+  });
+
+  test('importFile with force:true bypasses cache on second call', () => {
+    const { importFile } = require('../importers/chatgpt');
+    const filePath = path.join(tmpDir, 'force-test.json');
+    const n1 = makeNode('n1', null, 'user', 'force test');
+    const conv = makeConversation(crypto.randomUUID(), [n1], 'n1');
+    fs.writeFileSync(filePath, JSON.stringify([conv]), 'utf8');
+
+    const first = importFile(filePath);
+    assert.strictEqual(first.inserted, 1);
+
+    const callbacks: Array<{ convId: string }> = [];
+    const second = importFile(filePath, (c: { id: string }) => {
+      callbacks.push({ convId: c.id });
+    }, { force: true });
+    assert.ok(!second.unchanged);
+    assert.strictEqual(callbacks.length, 1);
+  });
 });

@@ -1,4 +1,4 @@
-export const DB_VERSION = 1;
+export const DB_VERSION = 2;
 
 export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS sessions (
@@ -48,6 +48,12 @@ CREATE TRIGGER IF NOT EXISTS messages_au
     INSERT INTO messages_fts(rowid, content, session_id)
     VALUES (new.rowid, new.content, new.session_id);
   END;
+
+CREATE TABLE IF NOT EXISTS file_meta (
+  file_path   TEXT    PRIMARY KEY,
+  mtime_ms    INTEGER NOT NULL,
+  size_bytes  INTEGER NOT NULL
+);
 
 CREATE INDEX IF NOT EXISTS idx_sessions_agent      ON sessions(agent);
 CREATE INDEX IF NOT EXISTS idx_sessions_created_at ON sessions(created_at DESC);
